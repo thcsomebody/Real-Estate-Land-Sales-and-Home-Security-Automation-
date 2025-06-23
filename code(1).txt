@@ -1,0 +1,91 @@
+{
+  "name": "Real Estate Status Poller",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": "cron",
+        "cronTime": "0 * * * *"
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.example.com/properties/updates",
+        "options": {}
+      },
+      "name": "Get Real Estate Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Process Each Property",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "/* \n  THIS IS A SIMULATION of writing to a persistent store.\n  In a real scenario, you would use a Database node (Postgres, etc.)\n  or an external service like Redis.\n\n  We are using n8n's static data for this example.\n  This will persist data between workflow executions.\n*/\n\nconst property = $json;\n\n// Use a unique key for each property\nconst propertyKey = `property_${property.id}`;\n\n// Get the static data object for this workflow\nconst staticData = this.getWorkflowStaticData('node');\n\n// Store the property status\nstaticData[propertyKey] = {\n  status: property.status,\n  address: property.address,\n  last_updated: new Date().toISOString()\n};\n\nreturn {json: {message: `Updated status for ${propertyKey} to ${property.status}`}};"
+      },
+      "name": "Write to State Store (DB/Cache)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [
+        [
+          {
+            "node": "Get Real Estate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Real Estate Data": {
+      "main": [
+        [
+          {
+            "node": "Process Each Property",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Property": {
+      "main": [
+        [
+          {
+            "node": "Write to State Store (DB/Cache)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

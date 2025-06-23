@@ -1,0 +1,141 @@
+{
+  "name": "Security Event Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "webhook-security-event",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "name": "Webhook (from Home Assistant)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ],
+      "webhookId": "your-webhook-id-here"
+    },
+    {
+      "parameters": {
+        "functionCode": "/*\n  THIS IS A SIMULATION of reading from a persistent store.\n  We will read the static data set by the other workflow.\n*/\nconst eventData = $json.body;\nconst propertyKey = `property_${eventData.property_id}`;\n\nconst staticData = this.getWorkflowStaticData('node');\n\n// Get the stored property data\nconst propertyInfo = staticData[propertyKey] || { status: 'unknown' };\n\n// Merge the event data with the property data for the next nodes\nconst combinedData = {\n  ...eventData,\n  property_status: propertyInfo.status,\n  property_address: propertyInfo.address\n};\n\nreturn { json: combinedData };"
+      },
+      "name": "Get Property Status from State Store",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json.property_status}}",
+              "operation": "equal",
+              "value2": "sold"
+            },
+            {
+              "value1": "{{$json.event_type}}",
+              "operation": "equal",
+              "value2": "motion"
+            }
+          ]
+        }
+      },
+      "name": "IF: Property Sold & Motion?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "TELEGRAM_CHAT_ID",
+        "text": "🚨 Security Alert (New Owner) 🚨\n\nMotion detected at property: {{$json.property_address}}.\n\nThis property was recently marked as sold. Please verify activity.\n\nEvent Type: {{$json.event_type}}\nSensor: {{$json.sensor_id}}",
+        "options": {}
+      },
+      "name": "Telegram: Notify New Owner",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        200
+      ],
+      "credentials": {
+        "telegramApi": "YourTelegramAPICredentials"
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_HOME_ASSISTANT_URL/api/services/camera/record",
+        "authentication": "headerAuth",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "entity_id",
+              "value": "{{$json.sensor_id}}"
+            }
+          ]
+        }
+      },
+      "name": "HTTP Req: Record Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": "YourHomeAssistantToken"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (from Home Assistant)": {
+      "main": [
+        [
+          {
+            "node": "Get Property Status from State Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Property Status from State Store": {
+      "main": [
+        [
+          {
+            "node": "IF: Property Sold & Motion?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Property Sold & Motion?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Notify New Owner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Req: Record Video",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  }
+}
